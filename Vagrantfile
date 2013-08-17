@@ -21,6 +21,7 @@ Vagrant.configure("2") do |config|
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.
   # config.vm.network :private_network, ip: "192.168.33.10"
+  config.vm.network :hostonly, "192.168.33.10"
 
   # Create a public network, which generally matched to bridged network.
   # Bridged networks make the machine appear as another physical device on
@@ -70,6 +71,13 @@ Vagrant.configure("2") do |config|
   #   puppet.manifests_path = "manifests"
   #   puppet.manifest_file  = "init.pp"
   # end
+
+  config.vm.provision :puppet do |puppet|
+    puppet.manifests_path = "puppet/manifests"
+    puppet.manifest_file  = "init.pp"
+    puppet.module_path = "puppet/modules"
+    puppet.options = ['--verbose']
+  end
 
   # Enable provisioning with chef solo, specifying a cookbooks path, roles
   # path, and data_bags path (all relative to this Vagrantfile), and adding

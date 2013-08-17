@@ -72,6 +72,15 @@ Vagrant.configure("2") do |config|
   #   puppet.manifest_file  = "init.pp"
   # end
 
+  # Set the default project share to use nfs
+  config.vm.share_folder "web1", "/var/www/personal/httpdocs", "./www", :create => true 
+
+  # Set the Timezone to something useful
+  config.vm.provision :shell, :inline => "echo \"Europe/London\" | sudo tee /etc/timezone && dpkg-reconfigure --frontend noninteractive tzdata"
+ 
+  # Update the server
+  config.vm.provision :shell, :inline => "apt-get update --fix-missing"
+
   config.vm.provision :puppet do |puppet|
     puppet.manifests_path = "puppet/manifests"
     puppet.manifest_file  = "init.pp"

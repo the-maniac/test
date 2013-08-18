@@ -1,145 +1,54 @@
-# Class: apache::params
-#
-# This class defines default parameters used by the main module class apache
-# Operating Systems differences in names and paths are addressed here
-#
-# == Variables
-#
-# Refer to apache class for the variables defined here.
-#
-# == Usage
-#
-# This class is not intended to be used directly.
-# It may be imported or inherited by other classes
-#
 class apache::params {
 
-  ### Application specific parameters
-  $package_modssl = $::operatingsystem ? {
-    /(?i:Ubuntu|Debian|Mint)/ => 'libapache-mod-ssl',
-    /(?i:SLES|OpenSuSE)/      => undef,
-    default                   => 'mod_ssl',
+  $pkg = $::operatingsystem ? {
+    /RedHat|CentOS/ => 'httpd',
+    /Debian|Ubuntu/ => 'apache2',
   }
 
-  ### Application related parameters
-
-  $package = $::operatingsystem ? {
-    /(?i:Ubuntu|Debian|Mint)/ => 'apache2',
-    /(?i:SLES|OpenSuSE)/      => 'apache2',
-    default                   => 'httpd',
+  $root = $apache_root ? {
+    "" => $::operatingsystem ? {
+      /RedHat|CentOS/ => '/var/www/vhosts',
+      /Debian|Ubuntu/ => '/var/www',
+    },
+    default => $apache_root
   }
 
-  $service = $::operatingsystem ? {
-    /(?i:Ubuntu|Debian|Mint)/ => 'apache2',
-    /(?i:SLES|OpenSuSE)/      => 'apache2',
-    default                   => 'httpd',
+  $user = $::operatingsystem ? {
+    /RedHat|CentOS/ => 'apache',
+    /Debian|Ubuntu/ => 'www-data',
   }
 
-  $service_status = $::operatingsystem ? {
-    default => true,
+  $group = $::operatingsystem ? {
+    /RedHat|CentOS/ => 'apache',
+    /Debian|Ubuntu/ => 'www-data',
   }
 
-  $process = $::operatingsystem ? {
-    /(?i:Ubuntu|Debian|Mint)/ => 'apache2',
-    /(?i:SLES|OpenSuSE)/      => 'httpd2-prefork',
-    default                   => 'httpd',
+  $conf = $::operatingsystem ? {
+    /RedHat|CentOS/ => '/etc/httpd',
+    /Debian|Ubuntu/ => '/etc/apache2',
   }
 
-  $process_args = $::operatingsystem ? {
-    default => '',
+  $log = $::operatingsystem ? {
+    /RedHat|CentOS/ => '/var/log/httpd',
+    /Debian|Ubuntu/ => '/var/log/apache2',
   }
 
-  $process_user = $::operatingsystem ? {
-    /(?i:Ubuntu|Debian|Mint)/ => 'www-data',
-    /(?i:SLES|OpenSuSE)/      => 'wwwrun',
-    default                   => 'apache',
+  $access_log = $::operatingsystem ? {
+    /RedHat|CentOS/ => "${log}/access_log",
+    /Debian|Ubuntu/ => "${log}/access.log",
   }
 
-  $config_dir = $::operatingsystem ? {
-    /(?i:Ubuntu|Debian|Mint)/ => '/etc/apache2',
-    /(?i:SLES|OpenSuSE)/      => '/etc/apache2',
-    freebsd                   => '/usr/local/etc/apache20',
-    default                   => '/etc/httpd',
+  $a2ensite = $::operatingsystem ? {
+    /RedHat|CentOS/ => '/usr/local/sbin/a2ensite',
+    /Debian|Ubuntu/ => '/usr/sbin/a2ensite',
   }
 
-  $config_file = $::operatingsystem ? {
-    /(?i:Ubuntu|Debian|Mint)/ => '/etc/apache2/apache2.conf',
-    /(?i:SLES|OpenSuSE)/      => '/etc/apache2/httpd.conf',
-    freebsd                   => '/usr/local/etc/apache20/httpd.conf',
-    default                   => '/etc/httpd/conf/httpd.conf',
+
+
+
+  $error_log = $::operatingsystem ? {
+    /RedHat|CentOS/ => "${log}/error_log",
+    /Debian|Ubuntu/ => "${log}/error.log",
   }
-
-  $config_file_mode = $::operatingsystem ? {
-    default => '0644',
-  }
-
-  $config_file_owner = $::operatingsystem ? {
-    default => 'root',
-  }
-
-  $config_file_group = $::operatingsystem ? {
-    freebsd => 'wheel',
-    default => 'root',
-  }
-
-  $config_file_init = $::operatingsystem ? {
-    /(?i:Debian|Ubuntu|Mint)/ => '/etc/default/apache2',
-    /(?i:SLES|OpenSuSE)/      => '/etc/sysconfig/apache2',
-    default                   => '/etc/sysconfig/httpd',
-  }
-
-  $pid_file = $::operatingsystem ? {
-    /(?i:Debian|Ubuntu|Mint)/ => '/var/run/apache2.pid',
-    /(?i:SLES|OpenSuSE)/      => '/var/run/httpd2.pid',
-    default                   => '/var/run/httpd.pid',
-  }
-
-  $log_dir = $::operatingsystem ? {
-    /(?i:Debian|Ubuntu|Mint)/ => '/var/log/apache2',
-    /(?i:SLES|OpenSuSE)/      => '/var/log/apache2',
-    default                   => '/var/log/httpd',
-  }
-
-  $log_file = $::operatingsystem ? {
-    /(?i:Debian|Ubuntu|Mint)/ => ['/var/log/apache2/access.log','/var/log/apache2/error.log'],
-    /(?i:SLES|OpenSuSE)/      => ['/var/log/apache2/access.log','/var/log/apache2/error.log'],
-    default                   => ['/var/log/httpd/access.log','/var/log/httpd/error.log'],
-  }
-
-  $data_dir = $::operatingsystem ? {
-    /(?i:Debian|Ubuntu|Mint)/ => '/var/www',
-    /(?i:Suse|OpenSuse)/      => '/srv/www/htdocs',
-    default                   => '/var/www/html',
-  }
-
-  $port = '80'
-  $protocol = 'tcp'
-
-  # General Settings
-  $my_class = ''
-  $source = ''
-  $source_dir = ''
-  $source_dir_purge = false
-  $template = ''
-  $options = ''
-  $service_autorestart = true
-  $service_requires = Package['apache']
-  $absent = false
-  $version = ''
-  $disable = false
-  $disableboot = false
-
-  ### General module variables that can have a site or per module default
-  $monitor = false
-  $monitor_tool = ''
-  $monitor_target = $::ipaddress
-  $firewall = false
-  $firewall_tool = ''
-  $firewall_src = '0.0.0.0/0'
-  $firewall_dst = $::ipaddress
-  $puppi = false
-  $puppi_helper = 'standard'
-  $debug = false
-  $audit_only = false
 
 }

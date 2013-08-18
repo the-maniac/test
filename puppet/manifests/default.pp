@@ -6,6 +6,10 @@ class {'apt':
   always_apt_update => true,
 }
 
+host { 'home.maniac.in.ua':
+    ip => '127.0.0.1',
+}
+
 Class['::apt::update'] -> Package <|
     title != 'python-software-properties'
 and title != 'software-properties-common'
@@ -31,24 +35,27 @@ package { [
 
 class { 'apache': }
 
-apache::dotconf { 'custom':
-  content => 'EnableSendfile Off',
-}
+#apache::dotconf { 'custom':
+#  content => 'EnableSendfile Off',
+#}
 
-apache::module { 'rewrite': }
+#apache::module { 'rewrite': }
 apache::module { 'ssl': }
 
-apache::vhost { 'personal':
-  server_name   => 'personal',
-  ssl           => true,
-  serveraliases => [
-    'personal'
+apache::namevhost { "*:8080": ensure => present }
+apache::listen { "8080": ensure => present }
+
+apache::vhost { 'home.maniac.in.ua':
+  user    => 'vagrant',
+  aliases => [
+    'home.maniac.in.ua'
   ],
   docroot       => '/var/www/personal/httpdocs',
-  port          => '80',
-  env_variables => [
-],
-  priority      => '1',
+  ports          => ['*:8080'],
+}
+
+class { 'memcached':
+  max_memory => 50
 }
 
 class { 'php':
@@ -74,50 +81,51 @@ class { 'php::pear':
 
 
 
-$xhprofPath = '/var/www/xhprof'
+#$xhprofPath = '/var/www/xhprof'
 
-php::pecl::module { 'xhprof':
-  use_package     => false,
-  preferred_state => 'beta',
-}
+#php::pecl::module { 'xhprof':
+#  use_package     => false,
+#  preferred_state => 'beta',
+#}
 
 if !defined(Package['git-core']) {
   package { 'git-core' : }
 }
 
-vcsrepo { $xhprofPath:
-  ensure   => present,
-  provider => git,
-  source   => 'https://github.com/facebook/xhprof.git',
-  require  => Package['git-core']
-}
+#vcsrepo { $xhprofPath:
+#  ensure   => present,
+#  provider => git,
+#  source   => 'https://github.com/facebook/xhprof.git',
+#  require  => Package['git-core']
+#}
 
-file { "${xhprofPath}/xhprof_html":
-  ensure  => 'directory',
-  owner   => 'vagrant',
-  group   => 'vagrant',
-  mode    => '0775',
-  require => Vcsrepo[$xhprofPath]
-}
+#file { "${xhprofPath}/xhprof_html":
+#  ensure  => 'directory',
+#  owner   => 'vagrant',
+#  group   => 'vagrant',
+#  mode    => '0775',
+#  require => Vcsrepo[$xhprofPath]
+#}
 
-composer::run { 'xhprof-composer-run':
-  path    => $xhprofPath,
-  require => [
-    Class['composer'],
-    File["${xhprofPath}/xhprof_html"]
-  ]
-}
 
-apache::vhost { 'xhprof':
-  server_name => 'xhprof',
-  docroot     => "${xhprofPath}/xhprof_html",
-  port        => 80,
-  priority    => '1',
-  require     => [
-    Php::Pecl::Module['xhprof'],
-    File["${xhprofPath}/xhprof_html"]
-  ]
-}
+#composer::run { 'xhprof-composer-run':
+#  path    => $xhprofPath,
+#  require => [
+#    Class['composer'],
+#    File["${xhprofPath}/xhprof_html"]
+#  ]
+#}
+
+#apache::vhost { 'xhprof':
+#  server_name => 'xhprof',
+#  docroot     => "${xhprofPath}/xhprof_html",
+#  port        => 80,
+#  priority    => '1',
+#  require     => [
+#    Php::Pecl::Module['xhprof'],
+#    File["${xhprofPath}/xhprof_html"]
+#  ]
+#}
 
 
 class { 'xdebug':
@@ -156,7 +164,7 @@ puphpet::ini { 'custom':
     'display_errors = On',
     'error_reporting = -1',
     'allow_url_fopen = On',
-    'memory_limit = 128',
+    'memory_limit = 256M',
     'max_execution_time = 60'
   ],
   ini     => '/etc/php5/conf.d/zzz_custom.ini',
@@ -175,10 +183,8 @@ class { 'phpmyadmin':
 }
 
 apache::vhost { 'phpmyadmin':
-  server_name => 'phpmyadmin',
+  user        => 'vagrant',
   docroot     => '/usr/share/phpmyadmin',
-  port        => 80,
-  priority    => '10',
   require     => Class['phpmyadmin'],
 }
 

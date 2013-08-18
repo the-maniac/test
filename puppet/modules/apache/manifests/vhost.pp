@@ -1,224 +1,315 @@
-# = Define: apache::vhost
-#
-# This class manages Apache Virtual Hosts configuration files
-#
-# == Parameters:
-# [*port*]
-#   The port to configure the host on
-#
-# [*docroot*]
-#   The VirtualHost DocumentRoot
-#
-# [*docroot_create*]
-#   If the specified directory has to be created. Default: false
-#
-# [*ssl*]
-#   Set to true to enable SSL for this Virtual Host
-#
-# [*template*]
-#   Specify a custom template to use instead of the default one
-#   The value will be used in content => template($template)
-#
-# [*priority*]
-#   The priority of the VirtualHost, lower values are evaluated first
-#   Set to '' to edit default apache value
-#
-# [*serveraliases*]
-#   An optional list of space separated ServerAliases
-#
-# [*env_variables*]
-#   An optional list of space separated environment variables (e.g ['APP_ENV dev'])
-#
-# [*server_admin*]
-#   Server admin email address
-#
-# [*server_name*]
-#   An optional way to directly set server name
-#   False mean, that servername is not present in generated config file
-#
-# [*passenger*]
-#   If Passenger should be enabled
-#
-# [*passenger_high_performance*]
-#   Set the PassengerHighPerformance directive
-#
-# [*passenger_pool_max_pool_size*]
-#   Set the PassengerMaxPoolSize directive
-#
-# [*passenger_pool_idle_time*]
-#   Set the PassengerPoolIdleTime directive
-#
-# [*passenger_max_requests*]
-#   Set the PassengerMaxRequests directive
-#
-# [*passenger_stat_throttle_rate*]
-#   Set the PassengerStatThrottleRate directive
-#
-# [*passenger_rack_auto_detect*]
-#   Set the RackAutoDetect directive
-#
-# [*passenger_rails_auto_detect*]
-#   Set the RailsAutoDetect directive
-#
-# [*passenger_rails_env*]
-#   Set the RailsEnv directive
-#
-# [*passenger_rails_base_uri*]
-#   Set the RackBaseURI directive
-#
-# [*passenger_rack_env*]
-#   Set the RackEnv directive
-#
-# [*passenger_rack_base_uri*]
-#   Set the RackBaseURI directive
-#
-# [*directory*]
-#   Set the VHost directory used for the <Directory> directive
-#
-# [*directory_options*]
-#   Set the directory's Options
-#
-# [*directory_allow_override*]
-#   Set the directory's override configuration
-#
-# == Examples:
-#  apache::vhost { 'site.name.fqdn':
-#    docroot  => '/path/to/docroot',
-#  }
-#
-#  apache::vhost { 'mysite':
-#    docroot  => '/path/to/docroot',
-#    template => 'myproject/apache/mysite.conf',
-#  }
-#
-#  apache::vhost { 'my.other.site':
-#    docroot                    => '/path/to/docroot',
-#    directory                  => '/path/to',
-#    directory_allow_override   => 'All',
-#  }
-#
 define apache::vhost (
-  $server_admin                  = '',
-  $server_name                   = '',
-  $docroot                       = '',
-  $docroot_create                = false,
-  $docroot_owner                 = 'root',
-  $docroot_group                 = 'root',
-  $port                          = '80',
-  $ssl                           = false,
-  $template                      = 'apache/virtualhost/vhost.conf.erb',
-  $priority                      = '50',
-  $serveraliases                 = '',
-  $env_variables                 = '', 
-  $passenger                     = false,
-  $passenger_high_performance    = true,
-  $passenger_max_pool_size       = 12,
-  $passenger_pool_idle_time      = 1200,
-  $passenger_max_requests        = 0,
-  $passenger_stat_throttle_rate  = 30,
-  $passenger_rack_auto_detect    = true,
-  $passenger_rails_auto_detect   = false,
-  $passenger_rails_env           = '',
-  $passenger_rails_base_uri      = '',
-  $passenger_rack_env            = '',
-  $passenger_rack_base_uri       = '',
-  $enable                        = true,
-  $directory                     = '',
-  $directory_options             = '',
-  $directory_allow_override      = 'None'
+  $ensure=present,
+  $config_file="",
+  $config_content=false,
+  $htdocs_source=false,
+  $conf_source=false,
+  $cgi_source=false,
+  $private_source=false,
+  $readme=false,
+  $docroot=false,
+  $cgibin=true,
+  $user="",
+  $admin="",
+  $group="",
+  $mode=2570,
+  $aliases=[],
+  $ports=['*:80'],
+  $accesslog_format="combined"
 ) {
 
-  $ensure                            = bool2ensure($enable)
-  $bool_docroot_create               = any2bool($docroot_create)
-  $bool_passenger                    = any2bool($passenger)
-  $bool_passenger_high_performance   = any2bool($passenger_high_performance)
-  $bool_passenger_rack_auto_detect   = any2bool($passenger_rack_auto_detect)
-  $bool_passenger_rails_auto_detect  = any2bool($passenger_rails_auto_detect)
+  include apache::params
 
-  $real_docroot = $docroot ? {
-    ''      => "${apache::data_dir}/${name}",
+  $wwwuser = $user ? {
+    ""      => $apache::params::user,
+    default => $user,
+  }
+
+  $wwwgroup = $group ? {
+    ""      => $apache::params::group,
+    default => $group,
+  }
+
+  # used in ERB templates
+  $wwwroot = $apache::params::root
+
+  $documentroot = $docroot ? {
+    false   => "${wwwroot}/${name}/htdocs",
     default => $docroot,
   }
 
-  $real_directory = $directory ? {
-    ''      => "${apache::data_dir}",
-    default => $directory,
+  $cgipath = $cgibin ? {
+    true    => "${wwwroot}/${name}/cgi-bin/",
+    false   => false,
+    default => $cgibin,
   }
 
-  $server_name_value = $server_name ? {
-    ''      => $name,
-    default => $server_name,
-  }
-
-  # Server admin email
-  if $server_admin != '' {
-    $server_admin_email = "${server_admin}"
-  } elsif ($name != 'default') and ($name != 'default-ssl') {
-    $server_admin_email = "webmaster@${name}"
-  } else {
-    $server_admin_email = "webmaster@localhost"
-  }
-
-  # Config file path
-  if $priority != '' {
-    $config_file_path = "${apache::vdir}/${priority}-${name}.conf"
-  } elsif ($name != 'default') and ($name != 'default-ssl') {
-    $config_file_path = "${apache::vdir}/${name}.conf"
-  } else {
-    $config_file_path = "${apache::vdir}/${name}"
-  }
-
-  # Config file enable path
-  if $priority != '' {
-    $config_file_enable_path = "${apache::config_dir}/sites-enabled/${priority}-${name}.conf"
-  } elsif ($name != 'default') and ($name != 'default-ssl') {
-    $config_file_enable_path = "${apache::config_dir}/sites-enabled/${name}.conf"
-  } else {
-    $config_file_enable_path = "${apache::config_dir}/sites-enabled/000-${name}"
-  }
-
-  include apache
-
-  file { "${config_file_path}":
-    ensure  => $ensure,
-    content => template($template),
-    mode    => $apache::config_file_mode,
-    owner   => $apache::config_file_owner,
-    group   => $apache::config_file_group,
-    require => Package['apache'],
-    notify  => $apache::manage_service_autorestart,
-  }
-
-  # Some OS specific settings:
-  # On Debian/Ubuntu manages sites-enabled
-  case $::operatingsystem {
-    ubuntu,debian,mint: {
-      file { "ApacheVHostEnabled_$name":
-        ensure  => $enable ? {
-          true  => "${config_file_path}",
-          false => absent,
+  case $ensure {
+    present: {
+      file { "${apache::params::conf}/sites-available/${name}":
+        ensure  => present,
+        owner   => root,
+        group   => root,
+        mode    => '0644',
+        seltype => $::operatingsystem ? {
+          redhat => 'httpd_config_t',
+          CentOS => 'httpd_config_t',
+          default => undef,
         },
-        path    => "${config_file_enable_path}",
-        require => Package['apache'],
+        require => Package[$apache::params::pkg],
+        notify  => Exec["apache-graceful"],
+      }
+
+      file { "${apache::params::root}/${name}":
+        ensure => directory,
+        owner  => root,
+        group  => root,
+        mode   => '0755',
+        seltype => $::operatingsystem ? {
+          redhat => "httpd_sys_content_t",
+          CentOS => "httpd_sys_content_t",
+          default => undef,
+        },
+        require => File["root directory"],
+      }
+
+      file { "${apache::params::root}/${name}/conf":
+        ensure => directory,
+        owner  => $admin ? {
+          "" => $wwwuser,
+          default => $admin,
+        },
+        group  => $wwwgroup,
+        mode   => $mode,
+        seltype => $::operatingsystem ? {
+          redhat => "httpd_config_t",
+          CentOS => "httpd_config_t",
+          default => undef,
+        },
+        require => [File["${apache::params::root}/${name}"]],
+      }
+
+      file { "${apache::params::root}/${name}/htdocs":
+        ensure => directory,
+        owner  => $wwwuser,
+        group  => $wwwgroup,
+        mode   => $mode,
+        seltype => $::operatingsystem ? {
+          redhat => "httpd_sys_content_t",
+          CentOS => "httpd_sys_content_t",
+          default => undef,
+        },
+        require => [File["${apache::params::root}/${name}"]],
+      }
+
+      # Private data
+      file {"${apache::params::root}/${name}/private":
+        ensure  => directory,
+        owner   => $wwwuser,
+        group   => $wwwgroup,
+        mode    => $mode,
+        seltype => $::operatingsystem ? {
+          redhat => 'httpd_sys_content_t',
+          CentOS => 'httpd_sys_content_t',
+          default => undef,
+        },
+        require => File["${apache::params::root}/${name}"],
+      }
+
+      # cgi-bin
+      file { "${name} cgi-bin directory":
+        path   => $cgipath ? {
+          false   => "${apache::params::root}/${name}/cgi-bin/",
+          default => $cgipath,
+        },
+        ensure => $cgipath ? {
+          "${apache::params::root}/${name}/cgi-bin/" => directory,
+          default => undef, # don't manage this directory unless under $root/$name
+        },
+        owner  => $wwwuser,
+        group  => $wwwgroup,
+        mode   => $mode,
+        seltype => $::operatingsystem ? {
+          redhat => "httpd_sys_script_exec_t",
+          CentOS => "httpd_sys_script_exec_t",
+          default => undef,
+        },
+        require => [File["${apache::params::root}/${name}"]],
+      }
+
+      if $conf_source {
+        File["${apache::params::root}/${name}/conf"] {
+          source  => $conf_source,
+          recurse => true,
+          purge   => true,
+          force   => true,
+        }
+      }
+
+      if $htdocs_source {
+        File["${apache::params::root}/${name}/htdocs"] {
+          source  => $htdocs_source,
+          recurse => true,
+          purge   => true,
+          force   => true,
+        }
+      }
+
+      if $private_source {
+        File["${apache::params::root}/${name}/private"] {
+          source  => $private_source,
+          recurse => true,
+          purge   => true,
+          force   => true,
+        }
+      }
+
+      if $cgi_source {
+        File["${name} cgi-bin directory"] {
+          source  => $cgi_source,
+          recurse => true,
+          purge   => true,
+          force   => true,
+        }
+      }
+
+      case $config_file {
+
+        default: {
+          File["${apache::params::conf}/sites-available/${name}"] {
+            source => $config_file,
+          }
+        }
+        "": {
+
+          if $config_content {
+            File["${apache::params::conf}/sites-available/${name}"] {
+              content => $config_content,
+            }
+          } else {
+            # default vhost template
+            File["${apache::params::conf}/sites-available/${name}"] {
+              content => template("apache/vhost.erb"),
+            }
+          }
+        }
+      }
+
+      # Log files
+      file {"${apache::params::root}/${name}/logs":
+        ensure => directory,
+        owner  => root,
+        group  => root,
+        mode   => '0755',
+        seltype => $::operatingsystem ? {
+          redhat => 'httpd_log_t',
+          CentOS => 'httpd_log_t',
+          default => undef,
+        },
+        require => File["${apache::params::root}/${name}"],
+      }
+
+      # We have to give log files to right people with correct rights on them.
+      # Those rights have to match those set by logrotate
+      file { ["${apache::params::root}/${name}/logs/access.log",
+              "${apache::params::root}/${name}/logs/error.log"] :
+        ensure => present,
+        owner => root,
+        group => adm,
+        mode => '0644',
+        seltype => $::operatingsystem ? {
+          redhat => 'httpd_log_t',
+          CentOS => 'httpd_log_t',
+          default => undef,
+        },
+        require => File["${apache::params::root}/${name}/logs"],
+      }
+
+      # README file
+      file {"${apache::params::root}/${name}/README":
+        ensure  => present,
+        owner   => root,
+        group   => root,
+        mode    => '0644',
+        content => $readme ? {
+          false => template("apache/README_vhost.erb"),
+          default => $readme,
+        },
+        require => File["${apache::params::root}/${name}"],
+      }
+
+      exec {"enable vhost ${name}":
+        command => $::operatingsystem ? {
+          RedHat => "${apache::params::a2ensite} ${name}",
+          CentOS => "${apache::params::a2ensite} ${name}",
+          default => "${apache::params::a2ensite} ${name}"
+        },
+        notify  => Exec["apache-graceful"],
+        require => [$::operatingsystem ? {
+          redhat => File["${apache::params::a2ensite}"],
+          CentOS => File["${apache::params::a2ensite}"],
+          default => Package[$apache::params::pkg]},
+          File["${apache::params::conf}/sites-available/${name}"],
+          File["${apache::params::root}/${name}/htdocs"],
+          File["${apache::params::root}/${name}/logs"],
+          File["${apache::params::root}/${name}/conf"]
+        ],
+        unless  => "/bin/sh -c '[ -L ${apache::params::conf}/sites-enabled/${name} ] \\
+          && [ ${apache::params::conf}/sites-enabled/${name} -ef ${apache::params::conf}/sites-available/${name} ]'",
       }
     }
-    redhat,centos,scientific,fedora: {
-      include apache::redhat
-    }
-    default: { }
-  }
 
-  if $bool_docroot_create == true {
-    file { $real_docroot:
-      ensure  => directory,
-      owner   => $docroot_owner,
-      group   => $docroot_group,
-      mode    => '0775',
-      require => Package['apache'],
-    }
-  }
+    absent: {
+      file { "${apache::params::conf}/sites-enabled/${name}":
+        ensure  => absent,
+        require => Exec["disable vhost ${name}"]
+      }
 
-  if $bool_passenger == true {
-    include apache::passenger
+      file { "${apache::params::conf}/sites-available/${name}":
+        ensure  => absent,
+        require => Exec["disable vhost ${name}"]
+      }
+
+      exec { "remove ${apache::params::root}/${name}":
+        command => "rm -rf ${apache::params::root}/${name}",
+        onlyif  => "test -d ${apache::params::root}/${name}",
+        require => Exec["disable vhost ${name}"],
+      }
+
+      exec { "disable vhost ${name}":
+        command => $::operatingsystem ? {
+          RedHat => "/usr/local/sbin/a2dissite ${name}",
+          CentOS => "/usr/local/sbin/a2dissite ${name}",
+          default => "/usr/sbin/a2dissite ${name}"
+        },
+        notify  => Exec["apache-graceful"],
+        require => [$::operatingsystem ? {
+          redhat => File["${apache::params::a2ensite}"],
+          CentOS => File["${apache::params::a2ensite}"],
+          default => Package[$apache::params::pkg]}],
+          onlyif => "/bin/sh -c '[ -L ${apache::params::conf}/sites-enabled/${name} ] \\
+            && [ ${apache::params::conf}/sites-enabled/${name} -ef ${apache::params::conf}/sites-available/${name} ]'",
+      }
+    }
+
+    disabled: {
+      exec { "disable vhost ${name}":
+        command => $operatingsystem ? {
+          RedHat => "/usr/local/sbin/a2dissite ${name}",
+          CentOS => "/usr/local/sbin/a2dissite ${name}",
+          default => "/usr/sbin/a2dissite ${name}"
+        },
+        notify  => Exec["apache-graceful"],
+        require => Package[$apache::params::pkg],
+        onlyif => "/bin/sh -c '[ -L ${apache::params::conf}/sites-enabled/${name} ] \\
+          && [ ${apache::params::conf}/sites-enabled/${name} -ef ${apache::params::conf}/sites-available/${name} ]'",
+      }
+
+      file { "${apache::params::conf}/sites-enabled/${name}":
+        ensure  => absent,
+        require => Exec["disable vhost ${name}"]
+      }
+    }
+    default: { fail ( "Unknown ensure value: '${ensure}'" ) }
   }
 }

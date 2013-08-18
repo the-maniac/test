@@ -1,9 +1,12 @@
 Vagrant.configure("2") do |config|
   config.vm.box = "personal"
   config.vm.box_url = "http://files.vagrantup.com/precise64.box"
+  config.vm.hostname = "vagrant.example.com"
 
   config.vm.network :private_network, ip: "192.168.56.101"
-    config.ssh.forward_agent = true
+  config.vm.network :forwarded_port, host: 8080, guest: 80
+  config.ssh.forward_agent = true
+
 
   config.vm.provider :virtualbox do |v|
     v.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
